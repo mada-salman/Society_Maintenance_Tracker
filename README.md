@@ -1,24 +1,46 @@
-# Society Maintenance Tracker
+# 🏢 Society Maintenance Tracker
 
-A full-stack web application for residential societies to manage and track maintenance complaints. Built with React (Vite), Node.js, Express, and Prisma (SQLite).
+A comprehensive full-stack web platform built for residential societies to log, track, and manage maintenance complaints, broadcast important community notices, and monitor operational analytics.
 
-## Features
-- **Role-Based Authentication**: Secure login and registration for Residents and Admins.
-- **Complaint Lifecycle**: Residents can raise complaints with optional photos. Admins can update the status (Open, In Progress, Resolved) and priority.
-- **History Tracking**: Every status change is recorded with timestamps and admin notes.
-- **Overdue Detection**: Complaints open for more than 3 days are flagged as overdue on the Admin Dashboard.
-- **Notice Board**: Admins can post notices. Important notices are pinned and trigger email broadcasts.
-- **Email Notifications**: Automated emails sent to residents upon status updates or important notices (via Ethereal testing SMTP).
-- **Premium UI**: Designed with modern aesthetics, glassmorphism, and responsive layouts.
+---
 
-## Prerequisites
-- Node.js (v16+)
-- npm or yarn
+## 🚀 Demo Credentials
 
-## Setup Instructions
+The database comes pre-seeded with sample user accounts for quick testing:
 
-### 1. Database & Backend Setup
-1. Open a terminal and navigate to the `backend/` directory:
+| Role | Email | Password |
+| :--- | :--- | :--- |
+| **Resident** | `resident@society.com` | `password123` |
+| **Admin** | `admin@society.com` | `password123` |
+
+---
+
+## ✨ Features
+
+- **Role-Based Authentication**: Secure JWT-based access control distinguishing between `RESIDENT` and `ADMIN` roles.
+- **Complaint Lifecycle & History**: Residents raise issues with photos; Admins manage status (`OPEN`, `IN_PROGRESS`, `RESOLVED`) and priority (`LOW`, `MEDIUM`, `HIGH`). Every status update records an audit log with timestamps and notes.
+- **Dynamic Overdue Surface**: Complaints remaining open past a configurable threshold (3+ days) are flagged as **OVERDUE** and prioritized at the top of the Admin view.
+- **Notice Board & Email Alerts**: Admins post notices. Flagging a notice as "Important" pins it to the top and triggers automated email broadcasts to residents via Nodemailer.
+- **Admin Analytics Dashboard**: Real-time visualization of complaint metrics by status, by category, and overdue counts.
+
+---
+
+## 🛠️ Technology Stack
+
+- **Frontend**: React.js (Vite), React Router, Lucide Icons, Custom CSS (Glassmorphism design).
+- **Backend**: Node.js, Express.js, Prisma ORM, JWT, bcryptjs, Multer, Nodemailer.
+- **Database**: SQLite (managed via Prisma).
+
+---
+
+## 💻 Local Setup Guide
+
+### Prerequisites
+- Node.js (v16 or higher)
+- npm
+
+### 1. Backend Setup
+1. Navigate to the backend folder:
    ```bash
    cd backend
    ```
@@ -26,24 +48,19 @@ A full-stack web application for residential societies to manage and track maint
    ```bash
    npm install
    ```
-3. Create a `.env` file in the `backend/` directory based on the provided `.env.example`:
-   ```bash
-   cp .env.example .env
-   ```
-4. Initialize the Prisma database (SQLite):
+3. Initialize the database schema & seed demo users:
    ```bash
    npx prisma db push
-   npx prisma generate
+   node seed.js
    ```
-5. Start the backend server:
+4. Start the backend server:
    ```bash
    npm start
-   # Or for development: npm run dev
    ```
-   The backend will run on `http://localhost:5000`.
+   *The backend runs on `http://localhost:5000`.*
 
 ### 2. Frontend Setup
-1. Open a new terminal and navigate to the `frontend/` directory:
+1. Open a new terminal and navigate to the frontend folder:
    ```bash
    cd frontend
    ```
@@ -51,29 +68,99 @@ A full-stack web application for residential societies to manage and track maint
    ```bash
    npm install
    ```
-3. Start the development server:
+3. Start the Vite development server:
    ```bash
    npm run dev
    ```
-   The frontend will run on the port provided by Vite (usually `http://localhost:5173`).
+   *Open `http://localhost:5173` in your browser.*
 
-## API Documentation
+---
 
-### Auth
-- `POST /api/auth/register`: Register a new user (`name`, `email`, `password`, `role`).
-- `POST /api/auth/login`: Authenticate and receive a JWT token (`email`, `password`).
+## 🗄️ Database Schema (Prisma)
 
-### Complaints
-- `POST /api/complaints`: Create a complaint (Requires Auth. Body: `category`, `description`, optional `photo` file).
-- `GET /api/complaints`: Fetch complaints. Residents see their own; Admins see all. (Requires Auth).
-- `PUT /api/complaints/:id`: Update complaint status, priority, and note. (Requires Admin Auth).
+```prisma
+model User {
+  id         Int         @id @default(autoincrement())
+  name       String
+  email      String      @unique
+  password   String
+  role       String      @default("RESIDENT") // RESIDENT | ADMIN
+  complaints Complaint[]
+}
 
-### Notices
-- `GET /api/notices`: Get all notices (Requires Auth).
-- `POST /api/notices`: Create a notice. Triggers email if `isImportant` is true. (Requires Admin Auth).
+model Complaint {
+  id          Int                @id @default(autoincrement())
+  residentId  Int
+  resident    User               @relation(fields: [residentId], references: [id])
+  category    String
+  description String
+  photoUrl    String?
+  priority    String             @default("LOW") // LOW | MEDIUM | HIGH
+  status      String             @default("OPEN") // OPEN | IN_PROGRESS | RESOLVED
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  history     ComplaintHistory[]
+}
 
-### Dashboard
-- `GET /api/dashboard`: Fetch admin metrics (total, by status, by category, overdue count). (Requires Admin Auth).
+model ComplaintHistory {
+  id          Int       @id @default(autoincrement())
+  complaintId Int
+  complaint   Complaint @relation(fields: [complaintId], references: [id])
+  changedBy   Int
+  oldStatus   String
+  newStatus   String
+  note        String?
+  createdAt   DateTime  @default(now())
+}
 
-## Architecture & System Design
-Please see `System_Design.md` for a detailed breakdown of the complaint history model, overdue detection, photo handling, and notification flows.
+model Notice {
+  id          Int      @id @default(autoincrement())
+  title       String
+  content     String
+  isImportant Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
+```
+
+---
+
+## 📡 API Documentation
+
+### Authentication Routes (`/api/auth`)
+- `POST /api/auth/register` - Create user (`name`, `email`, `password`, `role`).
+- `POST /api/auth/login` - Authenticate user & return JWT token.
+
+### Complaint Routes (`/api/complaints`)
+- `GET /api/complaints` - Fetch complaints (Residents see their own; Admins see all).
+- `POST /api/complaints` - Create complaint (`category`, `description`, optional `photo` upload).
+- `PUT /api/complaints/:id` - Update status, priority, and note (Admin only).
+
+### Notice Routes (`/api/notices`)
+- `GET /api/notices` - List all notices (Important notices pinned first).
+- `POST /api/notices` - Create notice (Admin only; `isImportant` triggers email broadcast).
+
+### Dashboard Routes (`/api/dashboard`)
+- `GET /api/dashboard` - Get analytics (`totalComplaints`, `byStatus`, `byCategory`, `overdueCount`).
+
+---
+
+## 🌐 Deployment Guide (GitHub + Cloud Hosting)
+
+### 1. Push to GitHub
+```bash
+git init
+git add .
+git commit -m "Deploy Society Maintenance Tracker"
+git branch -M main
+git remote add origin https://github.com/YOUR_USERNAME/Society_Maintenance_Tracker.git
+git push -u origin main
+```
+
+### 2. Host Backend (Render / Railway)
+- Connect GitHub repo, set Root Directory to `backend`.
+- Build Command: `npm install && npx prisma generate && npx prisma db push`
+- Start Command: `node index.js`
+
+### 3. Host Frontend (Vercel / Netlify)
+- Connect GitHub repo, set Root Directory to `frontend`.
+- Deploy directly using default Vite preset.

@@ -1,40 +1,56 @@
-# System Design: Society Maintenance Tracker
+# System Design Write-Up: Society Maintenance Tracker
 
-## Overview
-The Society Maintenance Tracker is a full-stack web application built to streamline the process of reporting, tracking, and resolving maintenance issues within a residential society. The system is designed with a role-based architecture, distinguishing between Residents (who report issues) and Admins (who manage operations and resolve issues).
+## 1. Architectural Overview
+The Society Maintenance Tracker is built on a modern decoupled architecture using **Node.js/Express** for the backend API, **React (Vite)** for the client application, and **SQLite via Prisma ORM** for persistent data storage. Role-Based Access Control (RBAC) is enforced at the API layer using JSON Web Tokens (JWT).
 
-## Architecture & Technology Stack
-- **Frontend**: React.js (Vite) for a fast, responsive single-page application.
-- **Backend**: Node.js with Express.js to handle API requests and business logic.
-- **Database**: SQLite (via Prisma ORM) for relational data management and easy local setup.
-- **Authentication**: JSON Web Tokens (JWT) for secure, stateless user sessions.
+```
+[ React Client ]  <--->  [ Express REST API ]  <--->  [ SQLite Database (Prisma) ]
+                                |
+                                v
+                   [ Multer Storage / Nodemailer ]
+```
 
-## 1. Complaint History Model
-The core of the application revolves around the `Complaint` entity. To ensure transparency, we implemented a robust history tracking model.
-- **Database Design**: The schema includes a `Complaint` table and a one-to-many relationship with a `ComplaintHistory` table.
-- **Lifecycle Tracking**: Whenever an Admin updates the status of a complaint (e.g., from `OPEN` to `IN_PROGRESS`), a new record is inserted into the `ComplaintHistory` table.
-- **Audit Trail**: This record captures the `oldStatus`, `newStatus`, the `changedBy` (Admin ID), a timestamp, and an optional `note`. This allows residents to see exactly when and why a status changed.
+---
 
-## 2. Overdue Detection
-To ensure no complaint is forgotten, the system features an automatic overdue detection mechanism.
-- **Logic**: A complaint is considered "overdue" if its status is `OPEN` and its `createdAt` timestamp is older than a configurable threshold (currently set to 3 days/72 hours).
-- **Implementation**: Instead of running a heavy CRON job to constantly update database fields, the overdue calculation is performed dynamically on the backend when the Admin Dashboard metrics are requested, and visually on the frontend.
-- **UI Surfacing**: In the Admin Dashboard, overdue complaints are visually highlighted (red background) and a metric counter alerts the admin to the total number of overdue issues.
+## 2. Complaint History & Audit Trail Model
+To guarantee complete operational transparency between residents and society administrators, the complaint lifecycle relies on an immutable audit logging architecture.
 
-## 3. Photo Handling
-Allowing residents to upload photos provides crucial context for maintenance issues.
-- **Storage Strategy**: For this initial version, we utilize local disk storage via the `multer` middleware in Express. 
-- **Workflow**: When a resident submits a complaint with an image, `multer` intercepts the form-data request, renames the file with a unique timestamp to prevent collisions, and saves it to the backend `uploads/` directory.
-- **Serving Images**: The backend serves the `uploads/` directory statically. The database stores the relative path (`/uploads/filename.jpg`), which the frontend resolves and renders in the complaint details.
+- **Data Modeling**: The system maintains a strict 1-to-N relationship between the `Complaint` entity and the `ComplaintHistory` entity.
+- **Event Triggers**: When an Admin updates a complaint's state (e.g., transition from `OPEN` to `IN_PROGRESS` or `RESOLVED`), the backend performs a atomic operation:
+  1. The target `Complaint` record is updated with the new `status` and `priority`.
+  2. A new `ComplaintHistory` record is automatically inserted, referencing the `complaintId`, the `changedBy` user ID, `oldStatus`, `newStatus`, timestamp (`createdAt`), and an optional administrative `note`.
+- **UI Visibility**: Residents can inspect their complaint cards to see a chronological timeline of every transition along with the admin's notes, preventing communication gaps.
 
-## 4. Notification Flow
-Keeping residents informed is critical for user satisfaction.
-- **Triggers**: The system triggers email notifications on two primary events:
-  1. A complaint's status is updated by an admin.
-  2. An admin posts an "Important" notice to the notice board.
-- **Integration**: The backend utilizes `nodemailer` configured with Ethereal Email (a fake SMTP service specifically designed for testing). 
-- **Workflow**: When an admin updates a status, the backend retrieves the resident's email via a Prisma relational query and dispatches an asynchronous email function containing the new status and any admin notes. For important notices, it queries all users with the `RESIDENT` role and sends a broadcast email.
+---
 
-## 5. Security & Access Control
-- **Role-Based Access Control (RBAC)**: Middleware functions (`authMiddleware`, `adminMiddleware`) protect backend routes. Residents can only fetch their own complaints, while Admins can fetch all complaints and access metrics.
-- **Data Protection**: User passwords are computationally hashed using `bcryptjs` before storage, ensuring that plaintext passwords are never exposed.
+## 3. Overdue Detection & Surfacing Algorithm
+Preventing unattended complaints requires an automated mechanism to identify delayed resolutions without causing system performance degradation.
+
+- **Dynamic Evaluation Strategy**: Instead of relying on background cron jobs that run periodic write queries against the database, overdue evaluation is computed dynamically during data fetch operations.
+- **Configurable Threshold**: A complaint is designated as **OVERDUE** if:
+  $$\text{Status} = \text{"OPEN"} \quad \land \quad (\text{CurrentTime} - \text{CreatedAt}) > \text{Threshold (e.g., 3 Days)}$$
+- **Priority Surfacing**: In the `AdminDashboard`, the complaint feed is sorted using a composite comparator logic:
+  1. Complaints flagged as `isOverdue === true` are hoisted directly to the **top of the list**.
+  2. Sub-sorting is applied chronologically by creation timestamp descending.
+- **Visual Alerting**: Overdue complaints are rendered with distinct red highlighting (`#fef2f2` container background) and explicit warning badges to instantly capture administrative attention.
+
+---
+
+## 4. Photo Handling Architecture
+Visual evidence simplifies maintenance diagnosis for technicians before visiting a resident's unit.
+
+- **Multipart Upload Processing**: Photo uploads are handled using the `Multer` middleware configured for disk storage.
+- **File Naming & Collision Avoidance**: Incoming files are sanitized and assigned a unique timestamp suffix (`Date.now() + path.extname(originalName)`) to prevent filesystem overwrites.
+- **Static Asset Serving**: The Express server exposes the static `/uploads` directory over HTTP. The database persists only the relative file path string (e.g., `/uploads/1724450000000.png`).
+- **Rendering & Fallback**: The React client resolves full asset URLs dynamically (`http://localhost:5000/uploads/...`) and renders preview cards with responsive image containers.
+
+---
+
+## 5. Notification Flow & Integration
+Keeping users proactively informed on status changes and emergency notices is achieved via automated email triggers.
+
+- **SMTP Provider Integration**: The system leverages `Nodemailer` initialized with Ethereal SMTP (an isolated testing service suited for development validation).
+- **Trigger Workflows**:
+  1. **Status Update**: Upon an admin status mutation, the backend queries the resident's associated email address and asynchronously dispatches a personalized notification detailing the new status and note.
+  2. **Important Notices**: When an admin posts a notice marked with `isImportant = true`, the system retrieves all registered user emails with the `RESIDENT` role and fires a batch notification.
+- **Non-Blocking Execution**: Email dispatch functions are executed asynchronously outside the primary HTTP response block, ensuring API response latencies remain minimal for administrative users.
