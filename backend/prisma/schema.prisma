@@ -1,0 +1,50 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  password  String
+  role      String   @default("RESIDENT") // RESIDENT or ADMIN
+  complaints Complaint[]
+}
+
+model Complaint {
+  id          Int      @id @default(autoincrement())
+  residentId  Int
+  resident    User     @relation(fields: [residentId], references: [id])
+  category    String
+  description String
+  photoUrl    String?
+  priority    String   @default("LOW") // LOW, MEDIUM, HIGH
+  status      String   @default("OPEN") // OPEN, IN_PROGRESS, RESOLVED
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  history     ComplaintHistory[]
+}
+
+model ComplaintHistory {
+  id          Int      @id @default(autoincrement())
+  complaintId Int
+  complaint   Complaint @relation(fields: [complaintId], references: [id])
+  changedBy   Int      // Admin ID who changed it
+  oldStatus   String
+  newStatus   String
+  note        String?
+  createdAt   DateTime @default(now())
+}
+
+model Notice {
+  id          Int      @id @default(autoincrement())
+  title       String
+  content     String
+  isImportant Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
