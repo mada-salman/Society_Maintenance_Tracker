@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import { Settings, BarChart2, Bell, AlertTriangle } from 'lucide-react';
+import { API_BASE_URL } from '../config';
 
 function AdminDashboard() {
   const [complaints, setComplaints] = useState([]);
@@ -31,9 +32,9 @@ function AdminDashboard() {
       const headers = { Authorization: `Bearer ${token}` };
       
       const [complaintsRes, metricsRes, noticesRes] = await Promise.all([
-        axios.get('http://localhost:5000/api/complaints', { headers }),
-        axios.get('http://localhost:5000/api/dashboard', { headers }),
-        axios.get('http://localhost:5000/api/notices', { headers })
+        axios.get(`${API_BASE_URL}/api/complaints`, { headers }),
+        axios.get(`${API_BASE_URL}/api/dashboard`, { headers }),
+        axios.get(`${API_BASE_URL}/api/notices`, { headers })
       ]);
       
       setComplaints(complaintsRes.data);
@@ -52,7 +53,7 @@ function AdminDashboard() {
     e.preventDefault();
     try {
       const token = localStorage.getItem('token');
-      await axios.put(`http://localhost:5000/api/complaints/${selectedComplaint.id}`, {
+      await axios.put(`${API_BASE_URL}/api/complaints/${selectedComplaint.id}`, {
         status: updateStatus,
         priority: updatePriority,
         note: updateNote
@@ -73,7 +74,7 @@ function AdminDashboard() {
     setSubmittingNotice(true);
     try {
       const token = localStorage.getItem('token');
-      await axios.post('http://localhost:5000/api/notices', {
+      await axios.post(`${API_BASE_URL}/api/notices`, {
         title: noticeTitle,
         content: noticeContent,
         isImportant

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { PlusCircle, Clock, CheckCircle2, AlertCircle, FileText } from 'lucide-react';
+import { API_BASE_URL } from '../config';
 
 function ResidentDashboard() {
   const [complaints, setComplaints] = useState([]);
@@ -19,8 +20,8 @@ function ResidentDashboard() {
       const headers = { Authorization: `Bearer ${token}` };
       
       const [complaintsRes, noticesRes] = await Promise.all([
-        axios.get('http://localhost:5000/api/complaints', { headers }),
-        axios.get('http://localhost:5000/api/notices', { headers })
+        axios.get(`${API_BASE_URL}/api/complaints`, { headers }),
+        axios.get(`${API_BASE_URL}/api/notices`, { headers })
       ]);
       
       setComplaints(complaintsRes.data);
@@ -45,7 +46,7 @@ function ResidentDashboard() {
     if (photo) formData.append('photo', photo);
 
     try {
-      await axios.post('http://localhost:5000/api/complaints', formData, {
+      await axios.post(`${API_BASE_URL}/api/complaints`, formData, {
         headers: { 
           Authorization: `Bearer ${token}`,
           'Content-Type': 'multipart/form-data'
@@ -150,7 +151,7 @@ function ResidentDashboard() {
                   
                   {complaint.photoUrl && (
                     <div style={{ marginBottom: '1rem' }}>
-                      <img src={`http://localhost:5000${complaint.photoUrl}`} alt="Complaint" style={{ maxWidth: '200px', borderRadius: 'var(--radius-md)' }} />
+                      <img src={`${API_BASE_URL}${complaint.photoUrl}`} alt="Complaint" style={{ maxWidth: '200px', borderRadius: 'var(--radius-md)' }} />
                     </div>
                   )}
 
