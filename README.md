@@ -4,6 +4,13 @@ A comprehensive full-stack web platform built for residential societies to log, 
 
 ---
 
+## 🌐 Live Hosted Application URL
+
+- **Live Frontend App**: [https://society-maintenance-tracker-zeta-one.vercel.app](https://society-maintenance-tracker-zeta-one.vercel.app)
+- **Live Backend API**: [https://society-tracker-backend-ky5v.onrender.com](https://society-tracker-backend-ky5v.onrender.com)
+
+---
+
 ## 🚀 Demo Credentials
 
 The database comes pre-seeded with sample user accounts for quick testing:
